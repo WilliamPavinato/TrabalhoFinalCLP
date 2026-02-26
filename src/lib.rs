@@ -108,3 +108,84 @@ fn rk4_step(x: f64, y: f64, vx: f64, vy: f64, dt: f64, drag: f64, gravity: f64)
     (xn, yn, vxn, vyn)
 }
 
+/// Compute the complete trajectory of a single missile.
+///
+/// # Safety
+/// `out_points` must point to a buffer of at least `max_points` TrajectoryPoint elements.
+/// `out_count` must point to a valid c_int.
+///
+/// Called from Python as:
+///   lib.compute_trajectory(byref(params), out_buf, MAX_POINTS, byref(count))
+#[no_mangle]
+pub unsafe extern "C" fn compute_trajectory(
+    params: *const SimParams,
+    out_points: *mut TrajectoryPoint,
+    max_points: c_int,
+    out_count: *mut c_int,
+) {
+    // Dereference params pointer (safe because Python guarantees valid struct)
+    let p = &*params;
+
+    let angle_rad = p.angle_deg.to_radians();
+    let mut vx = p.speed * angle_rad.cos();
+    let mut vy = p.speed * angle_rad.sin();
+    let mut x: f64 = 0.0;
+    let mut y: f64 = 0.0;
+    let mut t: f64 = 0.0;
+
+    let limit = (max_points as usize).min(MAX_POINTS);
+    let mut count = 0usize;
+
+    // Integrate until missile hits ground (y < 0) or point buffer full
+    loop {
+        if count >= limit { break; }
+
+        // Store current point
+        let pt = out_points.add(count);
+        (*pt).x = x;
+        (*pt).y = y;
+        (*pt).t = t;
+        count += 1;
+
+        // Advance by one RK4 step
+        let (xn, yn, vxn, vyn) = rk4_step(x, y, vx, vy, p.dt, p.drag_coeff, p.gravity);
+
+        // Check ground collision (y crosses zero)
+        if yn < 0.0 && y >= 0.0 {
+            // Linear interpolation to find exact impact point
+            let frac = y / (y - yn);
+            let xi = x + frac * (xn - x);
+            if count < limit {
+                let pt = out_points.add(count);
+                (*pt).x = xi;
+                (*pt).y = 0.0;
+                (*pt).t = t + frac * p.dt;
+                count += 1;
+            }
+            break;
+        }
+
+        x = xn; y = yn; vx = vxn; vy = vyn;
+        t += p.dt;
+
+        // Safety: if missile goes far underground (numerical error), stop
+        if y < -1.0 { break; }
+    }
+
+    *out_count = count as c_int;
+}
+
+/// Compute maximum range for a given speed (no drag approximation as reference).
+/// Returns analytical range: R = v² * sin(2θ) / g
+/// Exported so Python can display the theoretical vs simulated comparison.
+#[no_mangle]
+pub extern "C" fn theoretical_range(speed: c_double, angle_deg: c_double, gravity: c_double) -> c_double {
+    let angle_rad = angle_deg.to_radians();
+    speed * speed * (2.0 * angle_rad).sin() / gravity
+}
+
+/// Return library version string pointer (static lifetime, safe to read from Python).
+#[no_mangle]
+pub extern "C" fn lib_version() -> *const u8 {
+    b"missile_sim_rust v1.0\0".as_ptr()
+}

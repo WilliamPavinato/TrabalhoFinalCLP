@@ -59,3 +59,52 @@ pub struct TrajectoryPoint {
 /// Maximum number of trajectory points we will store per missile.
 /// At dt=0.1s and a ~600s flight, 8000 points is plenty.
 const MAX_POINTS: usize = 8000;
+
+
+/// Internal derivative computation for RK4.
+/// Returns (dx/dt, dy/dt, dvx/dt, dvy/dt) given current state and params.
+fn derivatives(
+    _x: f64, _y: f64, vx: f64, vy: f64,
+    drag: f64, gravity: f64,
+) -> (f64, f64, f64, f64) {
+    let v = (vx * vx + vy * vy).sqrt();
+    // Drag decelerates along velocity vector: a_drag = -drag_coeff * v * v_unit
+    let ax = -drag * v * vx;
+    let ay = -gravity - drag * v * vy;
+    (vx, vy, ax, ay)
+}
+
+/// Advance state by one RK4 step of size dt.
+/// RK4: k1 = f(t,y), k2 = f(t+dt/2, y+k1*dt/2), ...
+///      y_new = y + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+fn rk4_step(x: f64, y: f64, vx: f64, vy: f64, dt: f64, drag: f64, gravity: f64)
+    -> (f64, f64, f64, f64)
+{
+    let (dx1, dy1, dvx1, dvy1) = derivatives(x, y, vx, vy, drag, gravity);
+
+    let x2  = x  + 0.5 * dt * dx1;
+    let y2  = y  + 0.5 * dt * dy1;
+    let vx2 = vx + 0.5 * dt * dvx1;
+    let vy2 = vy + 0.5 * dt * dvy1;
+    let (dx2, dy2, dvx2, dvy2) = derivatives(x2, y2, vx2, vy2, drag, gravity);
+
+    let x3  = x  + 0.5 * dt * dx2;
+    let y3  = y  + 0.5 * dt * dy2;
+    let vx3 = vx + 0.5 * dt * dvx2;
+    let vy3 = vy + 0.5 * dt * dvy2;
+    let (dx3, dy3, dvx3, dvy3) = derivatives(x3, y3, vx3, vy3, drag, gravity);
+
+    let x4  = x  + dt * dx3;
+    let y4  = y  + dt * dy3;
+    let vx4 = vx + dt * dvx3;
+    let vy4 = vy + dt * dvy3;
+    let (dx4, dy4, dvx4, dvy4) = derivatives(x4, y4, vx4, vy4, drag, gravity);
+
+    let xn  = x  + dt / 6.0 * (dx1  + 2.0*dx2  + 2.0*dx3  + dx4);
+    let yn  = y  + dt / 6.0 * (dy1  + 2.0*dy2  + 2.0*dy3  + dy4);
+    let vxn = vx + dt / 6.0 * (dvx1 + 2.0*dvx2 + 2.0*dvx3 + dvx4);
+    let vyn = vy + dt / 6.0 * (dvy1 + 2.0*dvy2 + 2.0*dvy3 + dvy4);
+
+    (xn, yn, vxn, vyn)
+}
+

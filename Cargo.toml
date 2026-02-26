@@ -1,0 +1,16 @@
+[package]
+name = "missile_sim"
+version = "1.0.0"
+edition = "2021"
+description = "Ballistic missile simulation engine — compiled as C-ABI shared library"
+
+# Compile as a dynamic library so Python ctypes can load it at runtime.
+# cdylib = C-compatible dynamic library (no Rust ABI mangling)
+[lib]
+name = "missile_sim"
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3      # Maximum optimisation
+lto = true         # Link-time optimisation (smaller, faster binary)
+codegen-units = 1  # Single codegen unit for better inlining

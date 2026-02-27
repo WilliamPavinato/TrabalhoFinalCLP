@@ -1,0 +1,53 @@
+# ============================================================
+#  Makefile — ICBM Ballistic Simulation
+#  Two-language project: Rust (physics engine) + Python (GUI)
+#
+#  Targets:
+#    make build   — compile the Rust shared library
+#    make run     — fire a sample case (headless, prints trajectory CSV)
+#    make gui     — launch the full Pygame GUI (requires display)
+#    make clean   — remove compiled artefacts
+#    make check   — verify dependencies are installed
+# ============================================================
+
+# ── Paths ────────────────────────────────────────────────────
+LIB_RELEASE   = target/release/libmissile_sim.so
+LIB_WIN       = target/release/missile_sim.dll
+PYTHON        = python3
+CARGO         = cargo
+
+.PHONY: all build run gui clean check study
+
+## Default: build then run study case
+all: build study
+
+## 1. Compile the Rust shared library (release mode for performance)
+build:
+	@echo "==> Building Rust shared library..."
+	$(CARGO) build --release
+	@# Copy to project root so Python can find it easily
+	@if [ -f $(LIB_RELEASE) ]; then cp $(LIB_RELEASE) .; echo "    Copied libmissile_sim.so to project root"; fi
+	@if [ -f $(LIB_WIN)     ]; then cp $(LIB_WIN)     .; echo "    Copied missile_sim.dll to project root"; fi
+	@echo "==> Build complete."
+
+## 3. Launch full interactive GUI (requires a graphical display / X11)
+gui: build
+	@echo "==> Launching GUI (requires display)..."
+	$(PYTHON) MissileSimulation.py
+
+## Alias
+run: gui
+
+## 4. Clean compiled artefacts
+clean:
+	$(CARGO) clean
+	rm -f libmissile_sim.so missile_sim.dll trajectory_output.csv
+
+## 5. Dependency check
+check:
+	@echo "Checking dependencies..."
+	@$(CARGO) --version       || (echo "ERROR: cargo not found — install Rust: https://rustup.rs"; exit 1)
+	@$(PYTHON) --version      || (echo "ERROR: python3 not found"; exit 1)
+	@$(PYTHON) -c "import pygame; print('pygame', pygame.ver)" || \
+	    (echo "ERROR: pygame not found — run: pip install pygame"; exit 1)
+	@echo "All dependencies satisfied."

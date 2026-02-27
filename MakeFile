@@ -30,6 +30,12 @@ build:
 	@if [ -f $(LIB_WIN)     ]; then cp $(LIB_WIN)     .; echo "    Copied missile_sim.dll to project root"; fi
 	@echo "==> Build complete."
 
+## 2. Case-of-study: run headless trajectory computation and print CSV
+##    This exercises the Rust FFI without needing a display.
+study: build
+	@echo "==> Running case-of-study (headless trajectory, prints CSV)..."
+	$(PYTHON) StudyCase.py
+
 ## 3. Launch full interactive GUI (requires a graphical display / X11)
 gui: build
 	@echo "==> Launching GUI (requires display)..."
